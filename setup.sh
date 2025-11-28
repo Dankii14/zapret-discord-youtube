@@ -229,9 +229,8 @@ fi
 $ELEVATE_CMD sysctl -p /etc/sysctl.d/99-sysctl.conf
 
 #Добавление ссылки для быстрого изменения конфига через консоль
-rm -f /bin/zapret
-ln -s $HOME/zapret-configs/install.sh /bin/zapret || { echo "Ошибка при создании ссылки" >&2; exit 1; }
-
+ln -s $HOME/zapret-configs/install.sh ~/.local/bin/zapret || { echo "Ошибка при создании ссылки" >&2; exit 1; }
+ln -s $HOME/zapret-configs/hostlist-change.sh ~/.local/bin/zapret-hostlist | { echo "Ошибка при создании ссылки" >&2; exit 1; }
 # Определяем текущую оболочку (рабочий процесс)
 CURRENT_SHELL=$(ps -p $$ -o comm= 2>/dev/null || echo "")
 
