@@ -1,0 +1,165 @@
+# this file is included from init scripts
+# change values here
+# can help in case /tmp has not enough space
+#TMPDIR=/opt/zapret/tmp
+# redefine user for zapret daemons. required on Keenetic
+#WS_USER=nobody
+# override firewall type : iptables,nftables,ipfw
+FWTYPE=iptables
+# nftables only : set this to 0 to use pre-nat mode. default is post-nat.
+# pre-nat mode disables some bypass techniques for forwarded traffic but allows to see client IP addresses in debug log
+#POSTNAT=0
+# options for ipsets
+# maximum number of elements in sets. also used for nft sets
+SET_MAXELEM=522288
+# too low hashsize can cause memory allocation errors on low RAM systems , even if RAM is enough
+# too large hashsize will waste lots of RAM
+IPSET_OPT="hashsize 262144 maxelem $SET_MAXELEM"
+# dynamically generate additional ip. $1 = ipset/nfset/table name
+#IPSET_HOOK="/etc/zapret.ipset.hook"
+# options for ip2net. "-4" or "-6" auto added by ipset create script
+IP2NET_OPT4="--prefix-length=22-30 --v4-threshold=3/4"
+IP2NET_OPT6="--prefix-length=56-64 --v6-threshold=5"
+# options for auto hostlist
+AUTOHOSTLIST_RETRANS_THRESHOLD=3
+AUTOHOSTLIST_FAIL_THRESHOLD=3
+AUTOHOSTLIST_FAIL_TIME=60
+# 1 = debug autohostlist positives to ipset/zapret-hosts-auto-debug.log
+AUTOHOSTLIST_DEBUGLOG=0
+# number of parallel threads for domain list resolves
+MDIG_THREADS=30
+# ipset/*.sh can compress large lists
+GZIP_LISTS=1
+# command to reload ip/host lists after update
+# comment or leave empty for auto backend selection : ipset or ipfw if present
+# on BSD systems with PF no auto reloading happens. you must provide your own command
+# set to "-" to disable reload
+#LISTS_RELOAD="pfctl -f /etc/pf.conf"
+# mark bit used by nfqws to prevent loop
+DESYNC_MARK=0x40000000
+DESYNC_MARK_POSTNAT=0x20000000
+TPWS_SOCKS_ENABLE=0
+# tpws socks listens on this port on localhost and LAN interfaces
+TPPORT_SOCKS=987
+# use <HOSTLIST> and <HOSTLIST_NOAUTO> placeholders to engage standard hostlists and autohostlist in ipset dir
+# hostlist markers are replaced to empty string if MODE_FILTER does not satisfy
+# <HOSTLIST_NOAUTO> appends ipset/zapret-hosts-auto.txt as normal list
+TPWS_SOCKS_OPT="
+--filter-tcp=80 --methodeol <HOSTLIST> --new
+--filter-tcp=443 --split-pos=1,midsld --disorder <HOSTLIST>
+"
+TPWS_ENABLE=0
+TPWS_PORTS=80,443
+# use <HOSTLIST> and <HOSTLIST_NOAUTO> placeholders to engage standard hostlists and autohostlist in ipset dir
+# hostlist markers are replaced to empty string if MODE_FILTER does not satisfy
+# <HOSTLIST_NOAUTO> appends ipset/zapret-hosts-auto.txt as normal list
+TPWS_OPT="
+--filter-tcp=80 --methodeol <HOSTLIST> --new
+--filter-tcp=443 --split-pos=1,midsld --disorder <HOSTLIST>
+"
+NFQWS_ENABLE=1
+# redirect outgoing traffic with connbytes limiter applied in both directions.
+NFQWS_PORTS_TCP=80,443
+NFQWS_PORTS_UDP=443,50000-65535
+# Game filter ports - set by game filter toggle
+# When enabled: 1024-65535, when disabled: 12
+
+if [ -f "/opt/zapret/hostlists/.game_filter.enabled" ]; then
+    GAME_FILTER="1024-65535"
+else
+    GAME_FILTER="12"
+fi
+
+# PKT_OUT means connbytes dir original
+# PKT_IN means connbytes dir reply
+# this is --dpi-desync-cutoff=nX kernel mode implementation for linux. it saves a lot of CPU.
+NFQWS_TCP_PKT_OUT=$((6+$AUTOHOSTLIST_RETRANS_THRESHOLD))
+NFQWS_TCP_PKT_IN=3
+NFQWS_UDP_PKT_OUT=$((6+$AUTOHOSTLIST_RETRANS_THRESHOLD))
+NFQWS_UDP_PKT_IN=0
+# redirect outgoing traffic without connbytes limiter and incoming with connbytes limiter
+# normally it's needed only for stateless DPI that matches every packet in a single TCP session
+# typical example are plain HTTP keep alives
+# this mode can be very CPU consuming. enable with care !
+#NFQWS_PORTS_TCP_KEEPALIVE=80
+#NFQWS_PORTS_UDP_KEEPALIVE=
+# use <HOSTLIST> and <HOSTLIST_NOAUTO> placeholders to engage standard hostlists and autohostlist in ipset dir
+# hostlist markers are replaced to empty string if MODE_FILTER does not satisfy
+# <HOSTLIST_NOAUTO> appends ipset/zapret-hosts-auto.txt as normal list
+# Пути к спискам и файлам
+LISTS="/opt/zapret/hostlists"
+FAKE="/opt/zapret/files/fake"
+###############################################################################
+# Основные параметры TCP/UDP Amazon
+###############################################################################
+
+YTDB_Amazon_TCP="443,444-65535"
+YTDB_Amazon_UDP="443,444-65535"
+YTDB_UDP_Repeats=2
+YTDB_Cutoff_Limit=3
+YTDB_TTL_Limit=8
+###############################################################################
+# YouTube QUIC (YTDB_YTQC) — стратегии как в Windows, оставлены выключенными
+###############################################################################
+
+# YTDB_YTQC=--dpi-desync=fake,ipfrag2 --dpi-desync-fake-quic=$FAKE/quic_7.bin --dpi-desync-cutoff=n3 --dpi-desync-repeats=3
+# YTDB_YTQC=--dpi-desync=fake,udplen --dpi-desync-udplen-increment=4 --dpi-desync-fake-quic=$FAKE/quic_4.bin --dpi-desync-cutoff=n3 --dpi-desync-repeats=2
+# YTDB_YTQC=--dpi-desync=fake,udplen --dpi-desync-udplen-increment=8 --dpi-desync-udplen-pattern=0xFEA82025 --dpi-desync-fake-quic=$FAKE/quic_4.bin --dpi-desync-cutoff=n4 --dpi-desync-repeats=2
+# YTDB_YTQC=--dpi-desync=fake,udplen --dpi-desync-udplen-increment=25 --dpi-desync-fake-quic=$FAKE/quic_5.bin --dpi-desync-repeats=2 --dpi-desync-cutoff=n3
+# YTDB_YTQC=--dpi-desync=fake --dpi-desync-fake-quic=$FAKE/quic_1.bin --dpi-desync-cutoff=n3 --dpi-desync-repeats=6
+YTDB_YTQC="--dpi-desync=fake,udplen --dpi-desync-fake-quic="$FAKE/quic_7.bin" --dpi-desync-repeats=2 --dpi-desync-cutoff=n3 --dup=2 --dup-cutoff=n3"
+###############################################################################
+# YouTube TCP (без QUIC, video.googlevideo.com)
+###############################################################################
+# YTDB_WIN_SZ=43 --hostlist-domains=googlevideo.com --hostlist=$LISTS/russia-youtube.txt --dpi-desync=fake,multisplit --dpi-desync-split-pos=sld+1 --dpi-desync-fake-tls=0x0F0F0E0F --dpi-desync-fake-tls=$FAKE/tls_clienthello_14.bin --dpi-desync-fake-tls-mod=rnd,dupsid --dpi-desync-fooling=md5sig --dpi-desync-autottl --dup=2 --dup-fooling=md5sig --dup-autottl --dup-cutoff=n3
+# YTDB_WIN_SZ=43 --hostlist-domains=googlevideo.com --hostlist=$LISTS/russia-youtube.txt --ipcache-hostname --dpi-desync=syndata,fake,multisplit --dpi-desync-split-pos=sld+1 --dpi-desync-fake-syndata=$FAKE/tls_clienthello_7.bin --dpi-desync-fake-tls=0x0F0F0E0F --dpi-desync-fake-tls=$FAKE/tls_clienthello_9.bin --dpi-desync-fake-tls-mod=rnd,dupsid --dpi-desync-fooling=md5sig --dpi-desync-autottl --dup=2 --dup-fooling=md5sig --dup-autottl --dup-cutoff=n3
+# YTDB_WIN_SZ=43 --hostlist-domains=googlevideo.com --hostlist=$LISTS/russia-youtube.txt --dpi-desync=fake,multidisorder --dpi-desync-split-pos=7,sld+1 --dpi-desync-fake-tls=0x0F0F0F0F --dpi-desync-fake-tls=$FAKE/tls_clienthello_4.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=fonts.google.com --dpi-desync-fooling=badseq --dpi-desync-autottl
+# YTDB_WIN_SZ=43 --hostlist-domains=googlevideo.com --hostlist=$LISTS/russia-youtube.txt --ipcache-hostname --dpi-desync=syndata,multisplit --dpi-desync-split-seqovl=1 --dpi-desync-split-pos=1,sld+1,endsld-2 --dpi-desync-fake-syndata=$FAKE/syn_packet.bin --dup=2 --dup-cutoff=n3
+# YTDB_WIN_SZ=43 --hostlist-domains=googlevideo.com --hostlist=$LISTS/russia-youtube.txt --dpi-desync=multisplit --dpi-desync-split-seqovl=224 --dpi-desync-split-seqovl-pattern=$FAKE/tls_clienthello_19.bin --dup=2 --dup-cutoff=n3
+YTDB_WIN_SZ="43 --hostlist-domains=googlevideo.com --hostlist="$LISTS/russia-youtube.txt" --dpi-desync=multisplit --dpi-desync-split-seqovl=282 --dpi-desync-split-seqovl-pattern="$FAKE/http_fake_MS.bin" --dup=2 --dup-cutoff=n3"
+NFQWS_OPT="
+--filter-tcp=80,443 --hostlist="$LISTS/netrogat.txt" --new
+--filter-udp=443 --hostlist="$LISTS/russia-youtubeQ.txt" $YTDB_YTQC --new
+--filter-tcp=4$YTDB_WIN_SZ --new
+--filter-tcp=443 --hostlist-domains=ntc.party --hostlist="$LISTS/russia-discord.txt" --dpi-desync=multisplit --dpi-desync-split-seqovl=286 --dpi-desync-split-seqovl-pattern="$FAKE/tls_clienthello_11.bin" --dup=2 --dup-cutoff=n3 --new
+--filter-tcp=80 --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=2 --dpi-desync-split-pos=sld+1 --dpi-desync-fake-http=0x0E0E0F0E --dpi-desync-fooling=md5sig --dup=2 --dup-fooling=md5sig --dup-cutoff=n3 --new
+--filter-tcp=$YTDB_Amazon_TCP --filter-l7=tls --ipset-exclude-ip=1.1.1.1,1.0.0.1,212.109.195.93,83.220.169.155,141.105.71.21,18.244.96.0/19,18.244.128.0/19 --dpi-desync=multisplit --dpi-desync-split-seqovl=225 --dpi-desync-split-seqovl-pattern="$FAKE/tls_clienthello_18.bin" --dup=2 --dup-cutoff=n3 --new
+--filter-tcp=444-65535 --filter-l7=unknown --ipset-exclude-ip=1.1.1.1,1.0.0.1,212.109.195.93,83.220.169.155,141.105.71.21,18.244.96.0/19,18.244.128.0/19 --dpi-desync-any-protocol --dpi-desync=syndata --synack-split=synack --dpi-desync-fake-syndata="$FAKE/tls_clienthello_18.bin" --dpi-desync-cutoff=n2 --new
+--filter-udp=443 --ipset-ip=162.159.198.1,162.159.198.2,162.159.36.1,162.159.46.1,2606:4700:103::1,2606:4700:103::2 --dpi-desync=fake,udplen --dpi-desync-fake-quic=$FAKE/quic_7.bin --dpi-desync-repeats=2 --dpi-desync-cutoff=n3 --dup=2 --dup-cutoff=n3 --new
+--filter-udp=$YTDB_Amazon_UDP --dpi-desync=fake --dpi-desync-any-protocol --dpi-desync-fake-unknown-udp="$FAKE/quic_7.bin" --dpi-desync-repeats=$YTDB_UDP_Repeats --dpi-desync-cutoff=n$YTDB_Cutoff_Limit --dpi-desync-ttl=$YTDB_TTL_Limit --new
+--filter-l3=ipv6 --filter-udp=50000-50090 --filter-l7=discord,stun --dpi-desync=fake --dpi-desync-autottl6 --dup=2 --dup-autottl6 --dup-cutoff=n3 --new
+--filter-l3=ipv4 --filter-udp=50000-50090 --filter-l7=discord,stun --dpi-desync=fake --dpi-desync-autottl --dup=2 --dup-autottl --dup-cutoff=n3
+"
+# none,ipset,hostlist,autohostlist
+MODE_FILTER=none
+# openwrt only : donttouch,none,software,hardware
+FLOWOFFLOAD=donttouch
+# openwrt: specify networks to be treated as LAN. default is "lan"
+#OPENWRT_LAN="lan lan2 lan3"
+# openwrt: specify networks to be treated as WAN. default wans are interfaces with default route
+#OPENWRT_WAN4="wan vpn"
+#OPENWRT_WAN6="wan6 vpn6"
+# for routers based on desktop linux and macos. has no effect in openwrt.
+# CHOOSE LAN and optinally WAN/WAN6 NETWORK INTERFACES
+# or leave them commented if its not router
+# it's possible to specify multiple interfaces like this : IFACE_LAN="eth0 eth1 eth2"
+# if IFACE_WAN6 is not defined it take the value of IFACE_WAN
+#IFACE_LAN=
+#IFACE_WAN=
+#IFACE_WAN6="ipsec0 wireguard0 he_net"
+# should start/stop command of init scripts apply firewall rules ?
+# not applicable to openwrt with firewall3+iptables
+INIT_APPLY_FW=1
+# firewall apply hooks
+#INIT_FW_PRE_UP_HOOK="/etc/firewall.zapret.hook.pre_up"
+#INIT_FW_POST_UP_HOOK="/etc/firewall.zapret.hook.post_up"
+#INIT_FW_PRE_DOWN_HOOK="/etc/firewall.zapret.hook.pre_down"
+#INIT_FW_POST_DOWN_HOOK="/etc/firewall.zapret.hook.post_down"
+# do not work with ipv4
+#DISABLE_IPV4=1
+# do not work with ipv6
+DISABLE_IPV6=1
+# select which init script will be used to get ip or host list
+# possible values : get_user.sh get_antizapret.sh get_combined.sh get_reestr.sh get_hostlist.sh
+# comment if not required
+#GETLIST=
